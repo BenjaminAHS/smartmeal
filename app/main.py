@@ -1,6 +1,110 @@
+import re
+import sys, os
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+
 import streamlit as st
 from PIL import Image
+from dotenv import load_dotenv
+from dotenv import load_dotenv
+import os
+import json
+load_dotenv(dotenv_path="C:\\Users\\hp\\Documents\\Albert School\\M1\\Gen AI\\smartmeal\\.env")
 
+# Imports internes
+from core.menu_generator import generate_meal_plan
+from core.fridge_scanner import detect_food_items
+from core.ingredient_extractor import extract_ingredients
+from core.shopping_list import compute_missing_items
+
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+load_dotenv()
+print("🔑 API KEY détectée :", os.getenv("OPENAI_API_KEY"))
+
+def clean_json_like(text: str):
+    """
+    Nettoie les sorties du modèle en retirant le bruit AVANT le vrai JSON.
+    Conserve tout à partir du premier '{'.
+    """
+
+    # Supprimer index type 0:, 1:
+    text = re.sub(r'\b\d+\s*:', '', text)
+
+    # Supprimer balises markdown
+    text = text.replace("```json", "").replace("```", "").strip()
+
+    # ⚠️ IMPORTANT : trouver le vrai début du JSON
+    if "{" in text:
+        text = text[text.index("{"):]
+
+    return text.strip()
+
+def apply_lunchbox_rules(menu, lunchbox_days):
+    """
+    Pour chaque jour dans lunchbox_days :
+    - Le repas du soir = master lunchbox (quantités doublées)
+    - Le lendemain midi = copie EXACTE du repas du soir (quantités normales)
+    - Tous les autres repas restent inchangés
+    """
+
+    days_order = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    index_map = {day: i for i, day in enumerate(days_order)}
+
+    from copy import deepcopy
+
+    for day in lunchbox_days:
+        if day not in index_map:
+            continue
+
+        i = index_map[day]
+        if i >= len(menu):
+            continue
+
+        current_day = menu[i]
+
+        # Trouver le repas du soir du jour J
+        dinner = next((r for r in current_day["repas"] if r["moment"] == "soir"), None)
+        if dinner is None:
+            continue
+
+        # Marquer comme lunchbox
+        dinner["lunchbox"] = True
+
+        # Doubler les quantités du soir
+        for ing in dinner["ingredients"]:
+            ing["quantity"] = ing["quantity"] * 2
+
+        # Déterminer le lendemain (modulo 7)
+        next_i = (i + 1) % len(menu)
+        next_day = menu[next_i]
+
+        # Créer la copie du dîner → midi du lendemain
+        lunch_copy = deepcopy(dinner)
+
+        # Remettre quantités normales pour la lunchbox du lendemain
+        for ing in lunch_copy["ingredients"]:
+            ing["quantity"] = ing["quantity"] / 2  
+
+        lunch_copy["moment"] = "midi"
+        lunch_copy["lunchbox"] = True
+
+        # REMPLACER le midi du lendemain par la copie
+        found = False
+        for j, repas in enumerate(next_day["repas"]):
+            if repas["moment"].lower() == "midi":
+                next_day["repas"][j] = lunch_copy
+                found = True
+                break
+
+        # Si pas de midi, on l'ajoute
+        if not found:
+            next_day["repas"].insert(0, lunch_copy)
+
+    return menu
 # -----------------------------
 # 🎯 Configuration de la page
 # -----------------------------
@@ -9,11 +113,63 @@ st.set_page_config(
     page_icon="🥗",
     layout="wide"
 )
+# Style pour centrer le titre
+st.markdown("""
+    <style>
+    .center-title {
+        text-align: center !important;
+        font-size: 42px !important;
+        font-weight: 900 !important;
+        margin-top: -20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown("<h1 class='center-title'>🥗 SmartMeal</h1>", unsafe_allow_html=True)
+
+st.markdown("""
+    <style>
+    /* Centrer uniquement la barre des onglets */
+    div[data-baseweb="tab-list"] {
+        display: flex !important;
+        justify-content: center !important;
+        margin-top: 10px !important;
+        margin-bottom: 20px !important;
+    }
+
+    /* Style des onglets */
+    div[data-baseweb="tab"] {
+        font-size: 18px !important;
+        padding: 10px 20px !important;
+        margin: 0 8px !important;
+        border-radius: 10px !important;
+        background-color: #f7f7f7 !important;
+        color: #444 !important;
+        font-weight: 600 !important;
+    }
+
+    div[data-baseweb="tab"]:hover {
+        background-color: #e6e6e6 !important;
+    }
+
+    div[data-baseweb="tab"][aria-selected="true"] {
+        background-color: #4CAF50 !important;
+        color: white !important;
+        font-weight: 700 !important;
+    }
+
+    /* IMPORTANT : empêcher le style des tabs d'affecter le contenu */
+    section.main > div {
+        padding-top: 0px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 
 # -----------------------------
 # 🏷️ En-tête
 # -----------------------------
-st.title("🥗 SmartMeal")
 st.subheader("Ton assistant repas intelligent 🍴")
 
 st.write("""
@@ -24,51 +180,131 @@ Bienvenue sur **SmartMeal**, l'application qui t'aide à :
 """)
 
 # -----------------------------
-# 🧭 Barre latérale : préférences utilisateur
-# -----------------------------
-st.sidebar.header("⚙️ Paramètres de ton menu")
-
-regime = st.sidebar.selectbox(
-    "Régime alimentaire",
-    ["Aucun", "Végétarien", "Végan", "Sans gluten", "Pescetarien"]
-)
-
-budget = st.sidebar.select_slider(
-    "Budget par repas (€)",
-    options=[3, 5, 7, 10, 15]
-)
-
-temps = st.sidebar.select_slider(
-    "Temps max de préparation (min)",
-    options=[10, 20, 30, 45, 60]
-)
-
-personnes = st.sidebar.number_input(
-    "Nombre de personnes",
-    min_value=1,
-    max_value=8,
-    value=2
-)
-
-# -----------------------------
 # 🧩 Onglets principaux
 # -----------------------------
-tab1, tab2 = st.tabs(["📅 Planificateur de repas", "📸 Scan de frigo / placard"])
+tab1, tab2, tab3 = st.tabs(["🧠 Planificateur de repas", "📸 Scanner frigo/placard", "🛒 Liste de courses"])
+
 
 # === Onglet 1 : Planificateur ===
 with tab1:
     st.header("📅 Génère ton menu hebdomadaire")
 
-    st.write("Clique sur le bouton ci-dessous pour générer un planning personnalisé.")
+    st.markdown("### ⚙️ Paramètres du menu")
+    
+    with st.container():
+        colA, colB = st.columns(2)
 
-    if st.button("🧠 Générer mon menu"):
-        with st.spinner("Génération du menu en cours..."):
-            # TODO: ici on intégrera le LLM (GPT, Llama, etc.)
-            st.success("✅ Menu généré avec succès ! (placeholder)")
-            st.info("Exemple : Lundi midi — Salade de lentilles aux légumes rôtis 🥕")
+        with colA:
+            type_menu = st.selectbox(
+                "🍽️ Style de menu",
+                ["Healthy 🥗", "Gourmand 🍕", "Mixte 🍴"]
+            )
+
+            regime = st.selectbox(
+                "🥦 Régime alimentaire",
+                ["Aucun", "Végétarien", "Végan", "Sans gluten", "Pescetarien"]
+            )
+
+            personnes = st.number_input(
+                "👥 Nombre de personnes",
+                min_value=1, max_value=8, value=1
+            )
+
+        with colB:
+            aliments_eviter = st.text_area(
+                "🚫 Aliments à éviter",
+                placeholder="poisson, brocoli, tofu, champignons..."
+            )
+
+            budget = st.slider(
+                "💰 Budget max par repas (€)",
+                3, 15, value=5
+            )
+
+            temps = st.slider(
+                "⏱️ Temps max de préparation (minutes)",
+                10, 60, value=20
+            )
+
+    st.markdown("### 🥡 Options Lunchbox")
+
+    colL1, colL2 = st.columns(2)
+
+    with colL1:
+        lunchbox_count = st.slider(
+            "🥡 Nombre de lunchboxes",
+            0, 5, 0
+        )
+
+    with colL2:
+        microwave = st.radio(
+            "🔥 Micro-ondes disponible ?",
+            ["Oui", "Non"],
+            horizontal=True
+        )
+        has_microwave = (microwave == "Oui")
 
     st.divider()
-    st.write("👉 Les repas générés s’afficheront ici avec leur liste d’ingrédients et étapes.")
+
+    # Centrage du bouton
+    col_btn_left, col_btn_center, col_btn_right = st.columns([1, 2, 1])
+
+    with col_btn_center:
+        generate_button = st.button("🧠 Générer mon menu", type="primary", use_container_width=True)
+
+
+    # 🔘 Bouton
+    if generate_button:
+        with st.spinner("Génération du menu en cours..."):
+            raw_text = generate_meal_plan(
+                regime, budget, temps, personnes, 
+                type_menu, aliments_eviter,
+                lunchbox_count, has_microwave
+            )
+            cleaned_text = clean_json_like(raw_text)
+
+            try:
+                parsed = json.loads(cleaned_text)
+
+                # Jours lunchbox choisis par l'utilisateur
+                days_order = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+                lunchbox_days = days_order[:lunchbox_count]
+
+                # Récupération du menu généré par le modèle
+                menu_data = parsed.get("menu", [])
+
+                # 🔥 Application stricte de la logique lunchbox (soir → lendemain midi)
+                menu_data = apply_lunchbox_rules(menu_data, lunchbox_days)
+
+                # Stockage
+                st.session_state["menu_data"] = menu_data
+                st.session_state["lunchbox_days"] = lunchbox_days
+
+                st.success("✅ Menu généré et parsé avec succès !")
+            except Exception as e:
+                st.error(f"Erreur JSON : {e}")
+                st.text_area("Texte renvoyé :", cleaned_text, height=300)
+
+            # -------------------------------
+            # 👉 Affichage stylé du menu ici
+            # -------------------------------
+            if menu_data:
+                st.divider()
+                st.header("🍽️ Ton planning de repas")
+                for day in menu_data:
+                    st.markdown(f"### 📅 {day['jour']}")
+                    for repas in day["repas"]:
+                        with st.expander(f"🍴 {repas['moment'].capitalize()} – {repas['plat']}"):
+                            st.write("**Ingrédients :**")
+                            # 👉 ici
+                            ingredients_list = [
+                                f"{ing['name'].capitalize()} — {ing['quantity']} {ing['unit']}"
+                                for ing in repas["ingredients"]
+                            ]
+                            st.markdown("- " + "\n- ".join(ingredients_list))
+
+                            st.write("**Instructions :**")
+                            st.write(repas["instructions"])
 
 # === Onglet 2 : Scan frigo ===
 with tab2:
@@ -82,12 +318,102 @@ with tab2:
 
         if st.button("🔍 Analyser le contenu"):
             with st.spinner("Analyse en cours..."):
-                # TODO: intégrer modèle vision ici (ex: GPT-4o vision ou CLIP)
-                st.success("✅ Analyse terminée ! (placeholder)")
-                st.info("Objets détectés : œufs, lait, beurre, tomates 🍅")
+                detected = detect_food_items(image)
+                st.success("✅ Aliments détectés :")
+                st.markdown(", ".join([f"**{item.capitalize()}**" for item in detected]))
 
-    st.divider()
-    st.write("Les ingrédients détectés seront ensuite comparés à ta liste de courses.")
+                selected = st.multiselect(
+                    "Sélectionne les aliments que tu confirmes avoir :",
+                    detected,
+                    default=detected
+                )
+                st.info(f"Tu as confirmé {len(selected)} aliment(s) présent(s).")
+
+                # === 🧠 Comparaison avec le menu ===
+                if "menu_data" in st.session_state:
+                    current_menu = st.session_state["menu_data"]
+                    ingredients = extract_ingredients(current_menu)
+
+                    present, missing = compute_missing_items(ingredients, selected)
+
+                    st.divider()
+                    st.header("🧾 Résumé de ton inventaire")
+
+                    st.subheader("✅ Déjà dans ton frigo :")
+                    if present:
+                        for p in present:
+                            st.write(f"• {p['name'].capitalize()} — {p['quantity']} {p['unit']}")
+                    else:
+                        st.text("Aucun ingrédient du menu détecté dans ton frigo 😢")
+
+                    st.subheader("❌ À acheter :")
+                    if missing:
+                        for m in missing:
+                            st.write(f"• {m['name'].capitalize()} — {m['quantity']} {m['unit']}")
+                        st.download_button(
+                            "💾 Télécharger la liste de courses",
+                            data="\n".join([f"{m['name']} — {m['quantity']} {m['unit']}" for m in missing]),
+                            file_name="liste_courses.txt",
+                            mime="text/plain"
+                        )
+                    else:
+                        st.success("🎉 Ton frigo contient déjà tout pour ton menu !")
+                else:
+                    st.warning("⚠️ Génère d'abord ton menu dans l'autre onglet avant de comparer.")
+
+# === Onglet 3 : Liste de courses ===
+with tab3:
+    st.header("🛒 Liste de courses automatique")
+
+    # 1. Vérifier si un menu existe
+    if "menu_data" not in st.session_state:
+        st.warning("⚠️ Génère d'abord ton menu dans l'onglet 'Planificateur de repas'.")
+        st.stop()
+
+    # Extraire les ingrédients consolidés du menu
+    menu_ingredients = extract_ingredients(st.session_state["menu_data"])
+
+    # 2. Vérifier si un scan frigo existe
+    fridge_items = []
+    if os.path.exists("data/fridge.json"):
+        with open("data/fridge.json", "r", encoding="utf-8") as f:
+            fridge_items = json.load(f)
+
+    # 3. Si on a un scan → comparer
+    if fridge_items:
+        present, missing = compute_missing_items(menu_ingredients, fridge_items)
+    else:
+        # Sinon → tout est manquant
+        present = []
+        missing = menu_ingredients
+
+    # 4. Affichage de la liste
+    st.subheader("❌ À acheter")
+
+    if not missing:
+        st.success("🎉 Tu as tout ce qu'il faut !")
+    else:
+        for ing in missing:
+            st.write(f"- **{ing['name'].capitalize()}** — {ing['quantity']} {ing['unit']}")
+
+        # 5. Bouton de téléchargement
+        shopping_text = "\n".join([
+            f"{ing['name']} — {ing['quantity']} {ing['unit']}" for ing in missing
+        ])
+
+        st.download_button(
+            "💾 Télécharger la liste de courses",
+            data=shopping_text,
+            file_name="liste_courses.txt",
+            mime="text/plain"
+        )
+
+    # Si scan frigo existant → afficher aussi ce qu'on a
+    if fridge_items:
+        st.subheader("🧊 Déjà dans ton frigo")
+        for p in present:
+            st.write(f"- {p['name'].capitalize()} — {p['quantity']} {p['unit']}")
+
 
 # -----------------------------
 # 🔚 Pied de page
