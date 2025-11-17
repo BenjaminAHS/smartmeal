@@ -304,7 +304,20 @@ with tab1:
                             st.markdown("- " + "\n- ".join(ingredients_list))
 
                             st.write("**Instructions :**")
-                            st.write(repas["instructions"])
+                            instructions = repas["instructions"]
+                            cleaned_instructions = []
+
+                            for step in instructions:
+                                # Parfois le modèle renvoie "0: '1. ....'" donc on nettoie
+                                clean = step
+                                clean = clean.replace("0:", "").replace("1:", "").replace("2:", "").replace("3:", "")
+                                clean = clean.replace('"', '').strip()
+
+                                cleaned_instructions.append(clean)
+
+                            # Affichage propre
+                            for step in cleaned_instructions:
+                                st.markdown(f"- {step}")
 
 # === Onglet 2 : Scan frigo ===
 with tab2:
