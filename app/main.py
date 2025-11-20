@@ -407,8 +407,6 @@ with tab2:
 
             # 🔥 Correction : stocker dans la session pour éviter des incohérences
             st.session_state["confirmed_objects"] = selected_objects
-            st.write("DEBUG fridge_items :", st.session_state["confirmed_objects"])
-            st.write("DEBUG type :", type(st.session_state["confirmed_objects"]))
             # Comparaison finale
             present, missing = compute_missing_items(
                 ingredients,
