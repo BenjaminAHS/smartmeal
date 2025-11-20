@@ -351,18 +351,18 @@ with tab2:
 
         st.divider()
 
+        # === COMPARAISON AVEC LE MENU ===
         if "menu_data" in st.session_state:
-            # Préparation des données pour la comparaison
             current_menu = st.session_state["menu_data"]
-            ingredients = extract_ingredients(current_menu) # Liste de dicts
+            
+            # Extraction propre des ingrédients du menu
+            ingredients_needed = extract_ingredients(current_menu)
 
-            # Création d'objets dicts pour le frigo pour homogénéiser
-            fridge_objects = [{"name": s, "quantity": None, "unit": None} for s in st.session_state["confirmed_items"]]
-            st.session_state["confirmed_objects"] = fridge_objects
-
+            # Récupération des items du frigo (on prend la liste brute, la fonction gérera)
+            fridge_content = st.session_state.get("confirmed_items", [])
             # Calcul
             try:
-                present, missing = compute_missing_items(ingredients, fridge_objects)
+                present, missing = compute_missing_items(ingredients_needed, fridge_content)
                 
                 st.subheader("✅ Déjà dans ton frigo :")
                 if present:
@@ -382,7 +382,7 @@ with tab2:
                 st.error(f"Erreur de calcul des manquants : {e}")
         else:
             st.warning("Génère d'abord ton menu dans l'onglet 1.")
-            
+
 # === Onglet 3 : Liste de courses ===
 with tab3:
     st.header("🛒 Liste de courses automatique")
