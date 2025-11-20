@@ -1,10 +1,9 @@
 import unicodedata
-import re
 
-def clean_text(text):
+def clean_simple(text):
     """
-    Nettoyage basique : minuscules, accents, espaces.
-    On NE retire PAS les 's' ici pour ne pas casser 'Maïs' ou 'Ananas'.
+    Nettoyage ultra-basique : minuscules et sans accents.
+    On ne retire PAS les 's' ici pour ne pas casser les mots comme 'Maïs'.
     """
     if isinstance(text, dict):
         text = text.get("name", "")
@@ -15,67 +14,64 @@ def clean_text(text):
     # 1. Minuscules
     text = text.lower().strip()
 
-    # 2. Enlever les accents (ex: Pâte -> pate)
+    # 2. Enlever les accents (ex: Pâte -> pate, Bœuf -> boeuf)
     text = ''.join(
         c for c in unicodedata.normalize('NFD', text)
         if unicodedata.category(c) != 'Mn'
     )
     
-    # 3. Enlever mots parasites (cuit, bio, frais...)
-    text = re.sub(r"\b(cuit|cuite|frais|fraiche|bio|rouge|blanc|entier)\b", "", text).strip()
-    
     return text
 
-def are_items_matching(menu_name, fridge_name):
+def is_match(menu_item, fridge_item):
     """
-    Compare deux ingrédients de manière flexible (singulier/pluriel).
-    Renvoie True si ça matche.
+    Vérifie si deux ingrédients correspondent, peu importe le pluriel.
     """
-    m = clean_text(menu_name)
-    f = clean_text(fridge_name)
+    m = clean_simple(menu_item)
+    f = clean_simple(fridge_item)
 
     if not m or not f:
         return False
 
-    # 1. Correspondance exacte
+    # 1. Correspondance exacte (ex: "lait" == "lait")
     if m == f:
         return True
 
-    # 2. Correspondance Menu (Singulier) vs Frigo (Pluriel)
-    # Ex: menu="oeuf", frigo="oeufs"
-    if m + "s" == f:
+    # 2. Le menu est au singulier, le frigo au pluriel (ex: "oeuf" vs "oeufs")
+    if m + "s" == f or m + "x" == f:
         return True
     
-    # 3. Correspondance Menu (Pluriel) vs Frigo (Singulier)
-    # Ex: menu="carottes", frigo="carotte"
-    if m == f + "s":
+    # 3. Le menu est au pluriel, le frigo au singulier (ex: "carottes" vs "carotte")
+    if m == f + "s" or m == f + "x":
         return True
 
-    # 4. Cas spécial : pluriels en 'x' (chou/choux)
-    if m + "x" == f or m == f + "x":
+    # 4. Sécurité anti-bug : Si le mot du menu est contenu ENTIÈREMENT dans celui du frigo
+    # Ex: Menu demande "Pomme", frigo a "Pommes gala" -> Match
+    # Attention : on vérifie la longueur pour éviter que "riz" matche "chorizo"
+    if m in f and len(m) > 3:
         return True
 
     return False
 
 def compute_missing_items(menu_ingredients, fridge_items):
     """
-    Compare les ingrédients.
+    Compare chaque ingrédient du menu avec tout le frigo.
     """
     present = []
     missing = []
 
-    # On garde une copie propre de la liste du frigo pour itérer efficacement
-    # fridge_items peut contenir des strings "oeufs" ou des dicts {"name": "oeufs"}
-    fridge_list = fridge_items if fridge_items else []
+    # Sécurité si les listes sont vides
+    if not fridge_items: fridge_items = []
+    if not menu_ingredients: menu_ingredients = []
 
     for ing_needed in menu_ingredients:
         found = False
         
-        # On cherche cet ingrédient dans TOUT le frigo
-        for fridge_item in fridge_list:
-            if are_items_matching(ing_needed, fridge_item):
+        # On teste l'ingrédient demandé contre TOUT ce qu'il y a dans le frigo
+        for fridge_item in fridge_items:
+            if is_match(ing_needed, fridge_item):
                 found = True
-                break # Trouvé ! Pas besoin de continuer à chercher cet ingrédient
+                # On met à jour la quantité possédée si besoin (optionnel)
+                break 
         
         if found:
             present.append(ing_needed)
