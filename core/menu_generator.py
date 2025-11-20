@@ -7,7 +7,9 @@ def generate_meal_plan(regime: str, budget: int, temps: int, personnes: int,
                        type_menu: str, aliments_eviter: str,
                        lunchbox_count: int, microwave: bool) -> str:
     """
-    Génère un menu hebdomadaire structuré à l'aide de GPT-4o-mini en prenant en compte une multitudes de paramètres choisis par l'user.
+    This function generates a fully structured weekly meal plan in strict JSON format using GPT-4o-mini.
+    It incorporates all user-defined constraints—diet type, cooking time, budget, forbidden foods, number of lunchboxes, microwave availability, and menu style.
+    The model outputs a complete weekly menu with meals, ingredients, quantities, and step-by-step instructions, ready to be parsed by your application.
     """
     prompt = f"""
     Tu dois répondre STRICTEMENT en renvoyant UN UNIQUE JSON VALIDE.

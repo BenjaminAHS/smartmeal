@@ -1,9 +1,8 @@
 def compute_missing_items(menu_ingredients, fridge_items):
     """
-    Compare les ingrédients du menu et les aliments du frigo.
-    Retourne :
-      - présents (avec quantités trouvées)
-      - manquants (avec quantités à acheter)
+    This function compares the ingredients required by the weekly menu with the food items detected in the user’s fridge.
+    It identifies which ingredients are already available and which ones still need to be purchased based on name matching.
+    The output consists of two lists: present items with their quantities, and missing items to buy.
     """
     fridge_set = {f.lower().strip() for f in fridge_items}
     present, missing = [], []

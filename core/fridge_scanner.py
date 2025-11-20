@@ -8,9 +8,11 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def detect_food_items(image: Image.Image) -> list[str]:
     """
-    Analyse une image de frigo/placard et renvoie une liste d'aliments détectés.
+    This function analyzes an image of a fridge or pantry and identifies the visible food items. 
+    It converts the picture to a safe format, sends it to an OpenAI vision model, and receives a concise list of detected ingredients. 
+    The output is returned as a clean Python list that your application can directly use.
     """
-     # Convertir en RGB si nécessaire (évite l’erreur RGBA → JPEG)
+    # Convertir en RGB si nécessaire (évite l’erreur RGBA → JPEG)
     if image.mode in ("RGBA", "P"):
         image = image.convert("RGB")
     # Convertir l'image en base64

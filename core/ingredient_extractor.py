@@ -3,8 +3,9 @@ import re
 
 def normalize_name(name: str) -> str:
     """
-    Nettoie et normalise les noms d'ingrédients (minuscules, sans pluriel ni accent).
-    Ex: 'Tomates cerises' → 'tomate cerise'
+    This function cleans and standardizes ingredient names to ensure consistent aggregation.
+    It lowercases text, removes simple plurals, strips accents or variants, and compresses extra spaces.
+    The result is a normalized ingredient name that can be reliably compared or grouped.
     """
     name = name.lower().strip()
     # Supprimer les pluriels simples
@@ -19,8 +20,9 @@ def normalize_name(name: str) -> str:
 
 def extract_ingredients(menu_data):
     """
-    Extrait et agrège tous les ingrédients du menu (quantités incluses).
-    Regroupe automatiquement les doublons normalisés.
+    This function extracts all ingredients from the full weekly menu and automatically aggregates duplicates.
+    It normalizes ingredient names, sums quantities, and harmonizes units whenever possible.
+    The output is a clean, alphabetically sorted list ready for a shopping list or inventory.
     """
     aggregated = defaultdict(lambda: {"quantity": 0.0, "unit": ""})
 
