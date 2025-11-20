@@ -1,22 +1,36 @@
 from collections import defaultdict
 import re
 
+import unicodedata
+import re
+
 def normalize_name(name: str) -> str:
     """
-    This function cleans and standardizes ingredient names to ensure consistent aggregation.
-    It lowercases text, removes simple plurals, strips accents or variants, and compresses extra spaces.
-    The result is a normalized ingredient name that can be reliably compared or grouped.
+    Normalisation avancée pour matcher frigo / menu.
     """
-    name = name.lower().strip()
-    # Supprimer les pluriels simples
-    if name.endswith("s") and not name.endswith("ss"):
-        name = name[:-1]
-    # Simplifier quelques variantes courantes
-    name = re.sub(r"\b(brun|basmati|sushi)\b", "", name).strip()
-    # Retirer les espaces multiples
-    name = re.sub(r"\s+", " ", name)
-    return name
+    if not isinstance(name, str):
+        name = str(name)
 
+    # minuscules
+    name = name.lower().strip()
+
+    # enlever accents
+    name = ''.join(
+        c for c in unicodedata.normalize('NFD', name)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+    # enlever pluriels simples
+    if name.endswith("s") and len(name) > 3:
+        name = name[:-1]
+
+    # enlever mots parasites
+    name = re.sub(r"\b(brun|basmati|sushi|bio|fraiche)\b", "", name).strip()
+
+    # enlever espaces multiples
+    name = re.sub(r"\s+", " ", name)
+
+    return name
 
 def extract_ingredients(menu_data):
     """
