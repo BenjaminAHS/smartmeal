@@ -386,9 +386,6 @@ with tab2:
         selected = st.session_state["confirmed_items"]  # mise à jour
         st.info(f"Tu as confirmé **{len(selected)}** aliment(s) présent(s).")
 
-        # Nettoyage
-        selected = [s.lower().strip() for s in selected]
-
         st.divider()
 
         # === COMPARAISON AVEC LE MENU ===
@@ -396,26 +393,14 @@ with tab2:
             current_menu = st.session_state["menu_data"]
             ingredients = extract_ingredients(current_menu)
 
-            # Normalisation des aliments du frigo
-            selected = [s.lower().strip() for s in selected]
-
             # Conversion en objets homogènes
-            selected_objects = [
+            selected = [
                 {"name": s, "quantity": None, "unit": None}
                 for s in selected
             ]
 
             # 🔥 Correction : stocker dans la session pour éviter des incohérences
-            st.session_state["confirmed_objects"] = selected_objects
-            st.write("🟥 DEBUG TYPE FRIDGE ITEMS:", type(selected_objects))
-
-            for i, obj in enumerate(selected_objects):
-                st.write(f"🟥 ITEM {i} TYPE:", type(obj))
-                st.write(f"🟥 ITEM {i} VALUE:", obj)
-                try:
-                    st.write("🟥 ITEM name:", obj["name"])
-                except Exception as e:
-                    st.write("🟥 ERROR ACCESSING name →", e)
+            st.session_state["confirmed_objects"] = selected
             # Comparaison finale
             present, missing = compute_missing_items(
                 ingredients,

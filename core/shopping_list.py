@@ -1,37 +1,75 @@
 # shopping_list.py
+import unicodedata
+import re
+
+# -------------------------
+# Normalisation intelligente
+# -------------------------
+
 def normalize_name(name):
-    """Force un nom à être une string en minuscules propre."""
+    """Normalise un nom d’ingrédient pour permettre le matching."""
     if not isinstance(name, str):
         return ""
-    return name.lower().strip()
 
+    name = name.lower().strip()
+
+    # enlever accents
+    name = ''.join(
+        c for c in unicodedata.normalize('NFD', name)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+    # pluriel → singulier basique
+    if name.endswith("s") and len(name) > 3:
+        name = name[:-1]
+
+    # supprimer espaces multiples
+    name = re.sub(r"\s+", " ", name)
+
+    return name
+
+
+# -------------------------
+# Matching menu <-> frigo
+# -------------------------
 
 def compute_missing_items(menu_ingredients, fridge_items):
     """
-    menu_ingredients : [
-        {"name": "...", "quantity": 100, "unit": "g"},
+    menu_ingredients = [
+        {"name": "carotte", "quantity": 250, "unit": "g"},
         ...
     ]
-    fridge_items : [
-        {"name": "..."},
-        "avocat",
-        ...
-    ]
+
+    fridge_items =
+        soit ["carotte", "lait"]
+        soit [{"name": "carotte"}, {"name":"lait"}]
+        soit mélange des deux
     """
 
     present = []
     missing = []
 
-    # 🔥 Normaliser les noms du frigo
     fridge_clean = []
 
+    # 🔥 On convertit TOUT en string propre
     for item in fridge_items:
-        if isinstance(item, dict) and "name" in item:
-            fridge_clean.append(normalize_name(item["name"]))
+
+        # cas dict : {"name": "..."}
+        if isinstance(item, dict):
+            name = item.get("name", "")
+            fridge_clean.append(normalize_name(name))
+
+        # cas string simple
         elif isinstance(item, str):
             fridge_clean.append(normalize_name(item))
 
-    # 🔥 Comparaison simple : normaliser aussi les ingrédients du menu
+        # cas inattendu → on ignore
+        else:
+            continue
+
+    # -------------------------
+    # Matching
+    # -------------------------
     for ing in menu_ingredients:
         ing_name = normalize_name(ing["name"])
 
