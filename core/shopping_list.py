@@ -1,77 +1,49 @@
 # shopping_list.py
-import unicodedata
-import re
-
-# -------------------------
-# Normalisation intelligente
-# -------------------------
-
 def normalize_name(name):
-    """Normalise un nom d’ingrédient pour permettre le matching."""
+    """
+    Force un nom à être une string en minuscules propre.
+    Gère robustement les cas où 'name' serait un dictionnaire ou None.
+    """
+    # Si par erreur on passe l'objet ingrédient entier (dict), on prend son 'name'
+    if isinstance(name, dict):
+        name = name.get("name", "")
+
+    # Si ce n'est pas une string (ex: None, int, float), on convertit ou retourne vide
     if not isinstance(name, str):
-        return ""
+        return str(name).lower().strip() if name is not None else ""
 
-    name = name.lower().strip()
+    return name.lower().strip()
 
-    # enlever accents
-    name = ''.join(
-        c for c in unicodedata.normalize('NFD', name)
-        if unicodedata.category(c) != 'Mn'
-    )
-
-    # pluriel → singulier basique
-    if name.endswith("s") and len(name) > 3:
-        name = name[:-1]
-
-    # supprimer espaces multiples
-    name = re.sub(r"\s+", " ", name)
-
-    return name
-
-
-# -------------------------
-# Matching menu <-> frigo
-# -------------------------
 
 def compute_missing_items(menu_ingredients, fridge_items):
     """
-    menu_ingredients = [
-        {"name": "carotte", "quantity": 250, "unit": "g"},
-        ...
-    ]
-
-    fridge_items =
-        soit ["carotte", "lait"]
-        soit [{"name": "carotte"}, {"name":"lait"}]
-        soit mélange des deux
+    Compare les ingrédients du menu avec ceux du frigo.
+    
+    menu_ingredients : liste de dicts [{'name': '...', 'quantity': ...}, ...]
+    fridge_items : liste de dicts [{'name': '...'}] OU liste de strings ['pomme', ...]
     """
 
     present = []
     missing = []
 
-    fridge_clean = []
+    # 🔥 1. Normaliser les noms du frigo dans un Set pour recherche rapide
+    fridge_clean = set()
 
-    # 🔥 On convertit TOUT en string propre
     for item in fridge_items:
-
-        # cas dict : {"name": "..."}
+        # Gestion flexible : item peut être une string ou un dict
+        val_to_normalize = item
         if isinstance(item, dict):
-            name = item.get("name", "")
-            fridge_clean.append(normalize_name(name))
+            val_to_normalize = item.get("name", "")
+        
+        normalized = normalize_name(val_to_normalize)
+        if normalized:
+            fridge_clean.add(normalized)
 
-        # cas string simple
-        elif isinstance(item, str):
-            fridge_clean.append(normalize_name(item))
-
-        # cas inattendu → on ignore
-        else:
-            continue
-
-    # -------------------------
-    # Matching
-    # -------------------------
+    # 🔥 2. Comparaison
     for ing in menu_ingredients:
-        ing_name = normalize_name(ing["name"])
+        # ing est censé être un dictionnaire venant de extract_ingredients
+        # On utilise .get() par sécurité
+        ing_name = normalize_name(ing.get("name", ""))
 
         if ing_name in fridge_clean:
             present.append(ing)

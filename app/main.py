@@ -321,122 +321,68 @@ with tab1:
 
 # === Onglet 2 : Scan frigo ===
 with tab2:
-    st.header("📸 Scanner ton frigo ou tes placards")
+    st.header("📸 Scanner ton frigo")
+    uploaded_file = st.file_uploader("Prends une photo :", type=["jpg", "jpeg", "png"])
 
-    # === Upload de l'image ===
-    uploaded_file = st.file_uploader("Prends une photo de ton frigo ou placard :", type=["jpg", "jpeg", "png"])
-
-    if uploaded_file is not None:
-
-        # Charger et afficher l'image
+    if uploaded_file:
         image = Image.open(uploaded_file)
         st.image(image, caption="📷 Image importée", use_column_width=True)
-
-        # === Bouton d'analyse ===
-        if st.button("🔍 Analyser le contenu"):
+        
+        if st.button("🔍 Analyser"):
             with st.spinner("Analyse en cours..."):
-                
                 detected = detect_food_items(image)
-
-                # Sauvegarde en session pour éviter de perdre après refresh
                 st.session_state["detected_items"] = detected
                 st.session_state["confirmed_items"] = detected.copy()
-
             st.success("✅ Analyse terminée !")
 
-    # 👉 Si déjà analysé auparavant, afficher bloc édition
     if "detected_items" in st.session_state:
-
         detected = st.session_state["detected_items"]
         selected = st.session_state["confirmed_items"]
 
-        st.markdown("### 🍏 Aliments détectés")
-        st.write(", ".join([f"**{item.capitalize()}**" for item in detected]))
-
-        st.subheader("📝 Modifie ton inventaire")
-
-        # === MULTISELECT persistant ===
-        selected_new = st.multiselect(
-            "Sélectionne les aliments que tu confirmes avoir :",
-            options=detected,
-            default=selected,
-            key="multiselect_detected"
-        )
-
-        # Mise à jour de la liste sélectionnée
+        st.subheader("📝 Validation inventaire")
+        selected_new = st.multiselect("Confirme les aliments :", options=detected, default=selected)
         st.session_state["confirmed_items"] = selected_new
 
-        # === AJOUT d'un aliment manuel ===
-        new_item = st.text_input("➕ Ajouter un aliment manquant :", placeholder="ex: beurre, riz, pommes...", key="add_item_input")
-
-        if st.button("Ajouter cet aliment", key="add_item_button"):
-            if new_item.strip():
-                item = new_item.strip().lower()
-                
-                # Ajouter seulement s'il n'existe pas déjà
-                if item not in [i.lower() for i in st.session_state["confirmed_items"]]:
-                    st.session_state["confirmed_items"].append(item)
-                    st.success(f"✔ '{new_item}' ajouté à ton inventaire !")
-                else:
-                    st.warning("⚠ Cet aliment est déjà présent.")
-            else:
-                st.warning("⚠ Entre un nom d’aliment valide.")
-
-        # Affichage résumé
-        selected = st.session_state["confirmed_items"]  # mise à jour
-        st.info(f"Tu as confirmé **{len(selected)}** aliment(s) présent(s).")
+        new_item = st.text_input("➕ Ajouter un aliment manquant :")
+        if st.button("Ajouter"):
+            if new_item and new_item not in st.session_state["confirmed_items"]:
+                st.session_state["confirmed_items"].append(new_item)
+                st.success(f"Ajouté : {new_item}")
 
         st.divider()
 
-        # === COMPARAISON AVEC LE MENU ===
         if "menu_data" in st.session_state:
+            # Préparation des données pour la comparaison
             current_menu = st.session_state["menu_data"]
-            ingredients = extract_ingredients(current_menu)
+            ingredients = extract_ingredients(current_menu) # Liste de dicts
 
-            # Conversion en objets homogènes
-            selected = [
-                {"name": s, "quantity": None, "unit": None}
-                for s in selected
-            ]
+            # Création d'objets dicts pour le frigo pour homogénéiser
+            fridge_objects = [{"name": s, "quantity": None, "unit": None} for s in st.session_state["confirmed_items"]]
+            st.session_state["confirmed_objects"] = fridge_objects
 
-            # 🔥 Correction : stocker dans la session pour éviter des incohérences
-            st.session_state["confirmed_objects"] = selected
-            # Comparaison finale
-            present, missing = compute_missing_items(
-                ingredients,
-                st.session_state["confirmed_objects"]
-            )
+            # Calcul
+            try:
+                present, missing = compute_missing_items(ingredients, fridge_objects)
+                
+                st.subheader("✅ Déjà dans ton frigo :")
+                if present:
+                    for p in present: st.write(f"• {p['name'].capitalize()} — {p['quantity']} {p['unit']}")
+                else:
+                    st.write("Rien trouvé correspondant au menu.")
 
-
-            st.header("🧾 Résumé de ton inventaire")
-
-            # Déjà dans le frigo
-            st.subheader("✅ Déjà dans ton frigo :")
-            if present:
-                for p in present:
-                    st.write(f"• {p['name'].capitalize()} — {p['quantity']} {p['unit']}")
-            else:
-                st.text("Aucun ingrédient du menu détecté dans ton frigo 😢")
-
-            # À acheter
-            st.subheader("❌ À acheter :")
-            if missing:
-                for m in missing:
-                    st.write(f"• {m['name'].capitalize()} — {m['quantity']} {m['unit']}")
-
-                st.download_button(
-                    "💾 Télécharger la liste de courses",
-                    data="\n".join([f"{m['name']} — {m['quantity']} {m['unit']}" for m in missing]),
-                    file_name="liste_courses.txt",
-                    mime="text/plain",
-                    key="download_missing_tab2"
-                )
-            else:
-                st.success("🎉 Ton frigo contient déjà tout pour ton menu !")
-
+                st.subheader("❌ À acheter :")
+                if missing:
+                    for m in missing: st.write(f"• {m['name'].capitalize()} — {m['quantity']} {m['unit']}")
+                    
+                    txt = "\n".join([f"{m['name']} — {m['quantity']} {m['unit']}" for m in missing])
+                    st.download_button("💾 Télécharger la liste", txt, "courses.txt")
+                else:
+                    st.success("Ton frigo est complet !")
+            except Exception as e:
+                st.error(f"Erreur de calcul des manquants : {e}")
         else:
-            st.warning("⚠️ Génère d'abord ton menu dans l'onglet Planificateur.")
-
+            st.warning("Génère d'abord ton menu dans l'onglet 1.")
+            
 # === Onglet 3 : Liste de courses ===
 with tab3:
     st.header("🛒 Liste de courses automatique")
