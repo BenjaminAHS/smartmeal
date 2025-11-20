@@ -1,91 +1,91 @@
-import unicodedata
-import numpy as np
-from openai import OpenAI
 import os
+from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
 # ---------- Normalisation basique ----------
 def normalize_name(name):
+    """Normalise un nom d’ingrédient."""
     if not isinstance(name, str):
-        name = str(name)
-
-    name = name.lower().strip()
-    name = ''.join(
-        c for c in unicodedata.normalize("NFD", name)
-        if unicodedata.category(c) != "Mn"
-    )
-
-    # pluriels simples
-    if name.endswith("s") and len(name) > 3:
-        name = name[:-1]
-
-    return name
+        return ""
+    return name.lower().replace("œ", "oe").replace("é", "e").strip()
 
 
-# ---------- Embeddings ----------
-def embed(text: str):
-    """Retourne l’embedding vectorisé d’un texte."""
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text
-    )
-    return np.array(response.data[0].embedding)
+# ---------- Distance sémantique via embeddings ----------
+def semantic_distance(a, b):
+    """Distance cosinus entre 2 textes."""
+    try:
+        emb = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=[a, b]
+        ).data
+        import numpy as np
+        v1 = np.array(emb[0].embedding)
+        v2 = np.array(emb[1].embedding)
+
+        return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    except Exception:
+        return 0  # fallback si modèle indisponible
 
 
-def cosine_similarity(a, b):
-    """Sim = cos(angle(a, b))"""
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+# ---------- MATCHING ----------
+def names_match(a, b):
+    """Vérifie si 2 noms d’ingrédients correspondent."""
+    a_n = normalize_name(a)
+    b_n = normalize_name(b)
+
+    # Match exact
+    if a_n == b_n:
+        return True
+
+    # Match partiel
+    if a_n in b_n or b_n in a_n:
+        return True
+
+    # Match intelligent
+    score = semantic_distance(a_n, b_n)
+    return score > 0.80
 
 
-# ---------- Matching principal ----------
-def compute_missing_items(menu_ingredients, fridge_items, threshold=0.80):
+# ---------- FONCTION PRINCIPALE ----------
+def compute_missing_items(menu_ingredients, fridge_items):
     """
-    Compare menu vs frigo avec embeddings :
-    - matching intelligent (cosine similarity)
-    - matching flexible (pluriels, accents, variations)
+    menu_ingredients = [
+        {"name": "...", "quantity": 100, "unit": "g"},
+        ...
+    ]
+
+    fridge_items = [
+        {"name": "..."},
+        ...
+    ]
     """
 
     present = []
     missing = []
 
-    # Normalisation des aliments du frigo
+    # 🔥 NORMALISATION DU FRIGO
     fridge_clean = []
     for item in fridge_items:
-        name = item["name"] if isinstance(item, dict) else str(item)
-        fridge_clean.append(normalize_name(name))
+        if isinstance(item, dict):
+            name = normalize_name(item.get("name"))
+            if name:
+                fridge_clean.append(name)
+        elif isinstance(item, str):
+            fridge_clean.append(normalize_name(item))
 
-    # Embedding de chaque ingrédient du frigo
-    fridge_vectors = {
-        name: embed(name)
-        for name in fridge_clean
-    }
-
-    # Matching pour chaque ingrédient du menu
+    # 🔥 ENSUITE MATCHING
     for ing in menu_ingredients:
+        ing_name = ing["name"]
 
-        raw_name = ing.get("name", "")
-        if isinstance(raw_name, dict):
-            raw_name = next(iter(raw_name.values()))
+        found = False
+        for f in fridge_clean:
+            if names_match(ing_name, f):
+                found = True
+                break
 
-        ing_name_clean = normalize_name(raw_name)
-
-        # Embedding du nom d’ingrédient du menu
-        ing_vec = embed(ing_name_clean)
-
-        # Comparaison avec tous les aliments du frigo
-        best_sim = 0
-        best_match = None
-
-        for fridge_name, fr_vec in fridge_vectors.items():
-            sim = cosine_similarity(ing_vec, fr_vec)
-
-            if sim > best_sim:
-                best_sim = sim
-                best_match = fridge_name
-
-        # Décision
-        if best_sim >= threshold:
+        if found:
             present.append(ing)
         else:
             missing.append(ing)
