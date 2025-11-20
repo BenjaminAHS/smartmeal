@@ -367,7 +367,8 @@ with tab2:
                             "💾 Télécharger la liste de courses",
                             data="\n".join([f"{m['name']} — {m['quantity']} {m['unit']}" for m in missing]),
                             file_name="liste_courses.txt",
-                            mime="text/plain"
+                            mime="text/plain",
+                            key="download_missing_tab2"
                         )
                     else:
                         st.success("🎉 Ton frigo contient déjà tout pour ton menu !")
@@ -418,7 +419,8 @@ with tab3:
             "💾 Télécharger la liste de courses",
             data=shopping_text,
             file_name="liste_courses.txt",
-            mime="text/plain"
+            mime="text/plain",
+            key="download_missing_tab3"
         )
 
     # Si scan frigo existant → afficher aussi ce qu'on a
