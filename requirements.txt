@@ -3,3 +3,4 @@ openai
 python-dotenv
 Pillow
 requests
+## Clé API : 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
