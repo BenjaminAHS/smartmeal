@@ -396,7 +396,24 @@ with tab2:
             current_menu = st.session_state["menu_data"]
             ingredients = extract_ingredients(current_menu)
 
-            present, missing = compute_missing_items(ingredients, selected)
+            # Normalisation des aliments du frigo
+            selected = [s.lower().strip() for s in selected]
+
+            # Conversion en objets homogènes
+            selected_objects = [
+                {"name": s, "quantity": None, "unit": None}
+                for s in selected
+            ]
+
+            # 🔥 Correction : stocker dans la session pour éviter des incohérences
+            st.session_state["confirmed_objects"] = selected_objects
+
+            # Comparaison finale
+            present, missing = compute_missing_items(
+                ingredients,
+                st.session_state["confirmed_objects"]
+            )
+
 
             st.header("🧾 Résumé de ton inventaire")
 
