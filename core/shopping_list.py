@@ -1,63 +1,20 @@
-import os
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
-# ---------- Normalisation basique ----------
+# shopping_list.py
 def normalize_name(name):
-    """Normalise un nom d’ingrédient."""
+    """Force un nom à être une string en minuscules propre."""
     if not isinstance(name, str):
         return ""
-    return name.lower().replace("œ", "oe").replace("é", "e").strip()
+    return name.lower().strip()
 
 
-# ---------- Distance sémantique via embeddings ----------
-def semantic_distance(a, b):
-    """Distance cosinus entre 2 textes."""
-    try:
-        emb = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=[a, b]
-        ).data
-        import numpy as np
-        v1 = np.array(emb[0].embedding)
-        v2 = np.array(emb[1].embedding)
-
-        return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-    except Exception:
-        return 0  # fallback si modèle indisponible
-
-
-# ---------- MATCHING ----------
-def names_match(a, b):
-    """Vérifie si 2 noms d’ingrédients correspondent."""
-    a_n = normalize_name(a)
-    b_n = normalize_name(b)
-
-    # Match exact
-    if a_n == b_n:
-        return True
-
-    # Match partiel
-    if a_n in b_n or b_n in a_n:
-        return True
-
-    # Match intelligent
-    score = semantic_distance(a_n, b_n)
-    return score > 0.80
-
-
-# ---------- FONCTION PRINCIPALE ----------
 def compute_missing_items(menu_ingredients, fridge_items):
     """
-    menu_ingredients = [
+    menu_ingredients : [
         {"name": "...", "quantity": 100, "unit": "g"},
         ...
     ]
-
-    fridge_items = [
+    fridge_items : [
         {"name": "..."},
+        "avocat",
         ...
     ]
     """
@@ -65,27 +22,20 @@ def compute_missing_items(menu_ingredients, fridge_items):
     present = []
     missing = []
 
-    # 🔥 NORMALISATION DU FRIGO
+    # 🔥 Normaliser les noms du frigo
     fridge_clean = []
+
     for item in fridge_items:
-        if isinstance(item, dict):
-            name = normalize_name(item.get("name"))
-            if name:
-                fridge_clean.append(name)
+        if isinstance(item, dict) and "name" in item:
+            fridge_clean.append(normalize_name(item["name"]))
         elif isinstance(item, str):
             fridge_clean.append(normalize_name(item))
 
-    # 🔥 ENSUITE MATCHING
+    # 🔥 Comparaison simple : normaliser aussi les ingrédients du menu
     for ing in menu_ingredients:
-        ing_name = ing["name"]
+        ing_name = normalize_name(ing["name"])
 
-        found = False
-        for f in fridge_clean:
-            if names_match(ing_name, f):
-                found = True
-                break
-
-        if found:
+        if ing_name in fridge_clean:
             present.append(ing)
         else:
             missing.append(ing)
