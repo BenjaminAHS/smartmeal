@@ -397,7 +397,8 @@ with tab2:
         if "menu_data" in st.session_state:
             current_menu = st.session_state["menu_data"]
             ingredients = extract_ingredients(current_menu)
-
+            if isinstance(selected_objects, dict):
+                selected_objects = [selected_objects]
             present, missing = compute_missing_items(ingredients, selected_objects)
 
             st.header("🧾 Résumé de ton inventaire")
