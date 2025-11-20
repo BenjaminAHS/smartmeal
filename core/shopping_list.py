@@ -1,3 +1,4 @@
+
 def compute_missing_items(menu_ingredients, fridge_items):
     """
     This function compares the ingredients required by the weekly menu with the food items detected in the user’s fridge.
@@ -7,18 +8,31 @@ def compute_missing_items(menu_ingredients, fridge_items):
     present = []
     missing = []
 
-    # transformer en set pour accélérer les comparaisons
-    fridge_names = {item["name"].lower().strip() for item in fridge_items}
+    # Préparer les noms du frigo
+    fridge_names = {str(item["name"]).lower().strip() for item in fridge_items}
 
     for ing in menu_ingredients:
-        ing_name = ing["name"].lower().strip()
 
-        if ing_name in fridge_names:
-            # déjà dans le frigo
+        # Forcer le nom en string propre
+        raw_name = ing.get("name", "")
+
+        # si c'est un dict → on prend la première valeur textuelle trouvée
+        if isinstance(raw_name, dict):
+            # ex: {"ingredient": "crème"}
+            raw_name = next(iter(raw_name.values()), "")
+        
+        # si c'est une liste → on prend le premier élément
+        if isinstance(raw_name, list) and raw_name:
+            raw_name = raw_name[0]
+
+        name = str(raw_name).lower().strip()
+
+        # Comparaison uniquement sur le nom
+        if name in fridge_names:
             present.append(ing)
         else:
-            # à acheter
             missing.append(ing)
 
     return present, missing
+
 
