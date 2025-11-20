@@ -335,12 +335,36 @@ with tab2:
                 st.success("✅ Aliments détectés :")
                 st.markdown(", ".join([f"**{item.capitalize()}**" for item in detected]))
 
+                # === Sélectionner, ajouter, retirer des aliments ===
+
+                st.subheader("📝 Modifie ton inventaire détecté")
+
+                # 1) Multiselect des aliments détectés
                 selected = st.multiselect(
                     "Sélectionne les aliments que tu confirmes avoir :",
-                    detected,
+                    options=detected,
                     default=detected
                 )
-                st.info(f"Tu as confirmé {len(selected)} aliment(s) présent(s).")
+
+                # 2) Champ pour ajouter un nouvel aliment
+                new_item = st.text_input("➕ Ajouter un aliment manquant :", placeholder="ex: beurre, riz, pommes...")
+
+                if st.button("Ajouter cet aliment"):
+                    if new_item.strip():
+                        # Ajoute l’aliment si pas déjà présent
+                        if new_item.lower() not in [x.lower() for x in selected]:
+                            selected.append(new_item.strip().lower())
+                            st.success(f"✔ '{new_item}' ajouté à ton inventaire !")
+                        else:
+                            st.warning("⚠ Cet aliment est déjà dans la liste.")
+                    else:
+                        st.warning("⚠ Entre un nom d’aliment valide.")
+
+                # 3) Affichage propre
+                st.info(f"Tu as confirmé **{len(selected)}** aliment(s) présent(s).")
+
+                # Convertir en minuscules, nettoyer
+                selected = [s.lower().strip() for s in selected]
 
                 # === 🧠 Comparaison avec le menu ===
                 if "menu_data" in st.session_state:
