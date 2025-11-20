@@ -1,19 +1,42 @@
+import unicodedata
+
+def normalize(s: str):
+    """Nettoyage avancé : minuscule, sans accents, sans pluriel."""
+    s = s.lower().strip()
+    s = ''.join(c for c in unicodedata.normalize('NFD', s)
+                if unicodedata.category(c) != 'Mn')
+    if s.endswith('s'):
+        s = s[:-1]
+    return s
+
+
 def compute_missing_items(menu_ingredients, fridge_items):
     """
-    This function compares the ingredients required by the weekly menu with the food items detected in the user’s fridge.
-    It identifies which ingredients are already available and which ones still need to be purchased based on name matching.
-    The output consists of two lists: present items with their quantities, and missing items to buy.
+    Compare les ingrédients nécessaires au menu avec les aliments du frigo.
+    Gère :
+    - fridge_items = strings
+    - fridge_items = liste mixte strings/dicts
+    - comparaison intelligente (sans accents, sans pluriels)
     """
-    fridge_set = {f.lower().strip() for f in fridge_items}
-    present, missing = [], []
 
+    present = []
+    missing = []
+
+    # On transforme tout le frigo en list de strings nettoyés
+    fridge_clean = []
+
+    for item in fridge_items:
+        if isinstance(item, dict) and "name" in item:
+            fridge_clean.append(normalize(item["name"]))
+        else:
+            fridge_clean.append(normalize(str(item)))
+
+    # On compare chaque ingrédient du menu
     for ing in menu_ingredients:
-        name = ing["name"]
-        qty = ing["quantity"]
-        unit = ing["unit"]
+        ing_name = normalize(ing["name"])
 
-        # Si un aliment du frigo correspond au nom de l'ingrédient
-        if any(f in name for f in fridge_set):
+        # Match si un élément du frigo contient ou égale le nom
+        if any(ing_name in f or f in ing_name for f in fridge_clean):
             present.append(ing)
         else:
             missing.append(ing)
