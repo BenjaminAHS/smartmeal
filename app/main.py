@@ -387,7 +387,9 @@ with tab2:
         st.info(f"Tu as confirmé **{len(selected)}** aliment(s) présent(s).")
 
         # Nettoyage
-        selected = [s.lower().strip() for s in selected]
+        # Conversion en objets homogènes pour la comparaison
+        selected_objects = [{"name": s.lower().strip(), "quantity": None, "unit": None} for s in selected]
+
 
         st.divider()
 
@@ -396,7 +398,7 @@ with tab2:
             current_menu = st.session_state["menu_data"]
             ingredients = extract_ingredients(current_menu)
 
-            present, missing = compute_missing_items(ingredients, selected)
+            present, missing = compute_missing_items(ingredients, selected_objects)
 
             st.header("🧾 Résumé de ton inventaire")
 
