@@ -407,6 +407,15 @@ with tab2:
 
             # 🔥 Correction : stocker dans la session pour éviter des incohérences
             st.session_state["confirmed_objects"] = selected_objects
+            st.write("🟥 DEBUG TYPE FRIDGE ITEMS:", type(selected_objects))
+
+            for i, obj in enumerate(selected_objects):
+                st.write(f"🟥 ITEM {i} TYPE:", type(obj))
+                st.write(f"🟥 ITEM {i} VALUE:", obj)
+                try:
+                    st.write("🟥 ITEM name:", obj["name"])
+                except Exception as e:
+                    st.write("🟥 ERROR ACCESSING name →", e)
             # Comparaison finale
             present, missing = compute_missing_items(
                 ingredients,
